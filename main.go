@@ -10,29 +10,25 @@ import (
 	"biscoito/go-subdoc/ooxml"
 )
 
-type Globals struct {
-	FileName string
-}
-
 func main() {
-	var vars Globals
+	var fileName string
 
-	flag.StringVar(&vars.FileName, "input", "", "Target document")
+	flag.StringVar(&fileName, "input", "", "Target document")
 	flag.Parse()
 
 	// If argument invalid / not supplied
-	if len(vars.FileName) <= 0 {
+	if len(fileName) <= 0 {
 		fmt.Printf("Usage: %s -input target.doc\n", filepath.Base(os.Args[0]))
 		flag.PrintDefaults()
 		os.Exit(0)
 	}
 
-	file_path, err := filepath.Abs(vars.FileName)
+	filePath, err := filepath.Abs(fileName)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	err = ooxml.ReadPackage(file_path)
+	err = ooxml.ReadPackage(filePath)
 	if err != nil {
 		log.Fatal(err)
 	}

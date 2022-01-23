@@ -3,10 +3,11 @@ package ooxml
 import (
 	"archive/zip"
 	"encoding/xml"
+	"fmt"
 	"io"
 	"log"
-
-	"github.com/go-xmlfmt/xmlfmt"
+	"sort"
+	"strconv"
 )
 
 func ReadPackage(fileName string) error {
@@ -25,13 +26,14 @@ func ReadPackage(fileName string) error {
 		if err != nil {
 			return err
 		}
-		xml_data, err := io.ReadAll(rc)
+
+		xmlBytes, err := io.ReadAll(rc)
 		if err != nil {
 			return err
 		}
 		rc.Close()
 
-		err = WritePackage(f, xml_data)
+		err = WritePackage(f, xmlBytes)
 		if err != nil {
 			return err
 		}
@@ -40,37 +42,37 @@ func ReadPackage(fileName string) error {
 	return nil
 }
 
-func WritePackage(f *zip.File, xml_data []byte) error {
-	file_filter_list := map[string]bool{
-		"word/_rels/document.xml.rels": true,
-		"word/document.xml":            true,
-		"word/styles.xml":              true,
-	}
+func WritePackage(zipFile *zip.File, xmlData []byte) error {
+	switch zipFile.Name {
+	case CDocumentXMLRels:
+		// log.Printf("\nContents of %s: %s\n", f.Name, xml_formatted)
 
-	xml_formatted := xmlfmt.FormatXML(string(xml_data[:]), "", "	", true)
+		rs := Relationships{}
+		xml.Unmarshal(xmlData, &rs)
 
-	if file_filter_list[f.Name] {
-		switch f.Name {
-		case c_document_rels:
-			log.Printf("\nContents of %s: %s\n", f.Name, xml_formatted)
+		log.Printf("Local: %s Space: %s", rs.XMLName.Local, rs.XMLName.Space)
 
-			// xml_structure := &Relationships{
-			// 	Relationships: []Relation{
-			// 		Id:         "rId5",
-			// 		Type:       "http://schemas.openxmlformats.org/officeDocument/2006/relationships/subDocument",
-			// 		Target:     `file:///\\biscoito.eu\test\`,
-			// 		TargetMode: "External",
-			// 	},
-			// }
-
-			var rl Relationships
-
-			xml.Unmarshal(xml_data, &rl)
-
-		case c_document:
-		case c_styles:
-		default:
+		var idList []int
+		for _, rel := range rs.Relationships {
+			i, _ := strconv.Atoi(rel.Id[len(rel.Id)-1:])
+			idList = append(idList, i)
 		}
+		sort.Ints(idList)
+		targetId := idList[len(idList)-1] + 1
+
+		rs.Relationships = append(rs.Relationships, Relation{
+			Id:         fmt.Sprintf("rId%d", targetId),
+			Type:       "http://schemas.openxmlformats.org/officeDocument/2006/relationships/subDocument",
+			Target:     `file:///\\biscoito.eu\test\`,
+			TargetMode: "External",
+		})
+
+		parsedXml, _ := xml.MarshalIndent(rs, "", "  ")
+		log.Printf("%s", string(parsedXml[:]))
+
+	case CDocument:
+	case CStyles:
+	default:
 	}
 
 	return nil

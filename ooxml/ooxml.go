@@ -1,7 +1,7 @@
 package ooxml
 
 const (
-	c_document_rels string = "word/_rels/document.xml.rels"
-	c_document      string = "word/document.xml"
-	c_styles        string = "word/styles.xml"
+	CDocumentXMLRels string = "word/_rels/document.xml.rels"
+	CDocument        string = "word/document.xml"
+	CStyles          string = "word/styles.xml"
 )
