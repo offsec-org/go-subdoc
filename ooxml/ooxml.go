@@ -11,8 +11,24 @@ import (
 	"strconv"
 )
 
-// TODO: Fix later
-var zfs ZipFiles
+// Appends file and data to a new zip file
+func appendToZip(zipName string, zipData []byte) {
+	ZipArray.Files = append(ZipArray.Files, ZipFile{
+		Name:     zipName,
+		Contents: zipData,
+	})
+}
+
+// Marshals the XML data with the XML Prolog
+func marshalWithHeader(v interface{}) ([]byte, error) {
+	parsed, err := xml.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	parsed = []byte(Header + string(parsed))
+
+	return parsed, nil
+}
 
 func Initialize(fileName string) error {
 	log.Println("Opening document...")
@@ -35,13 +51,12 @@ func Initialize(fileName string) error {
 		}
 		rc.Close()
 
-		err = EditPackage(f, zipData)
-		if err != nil {
+		if err = EditPackage(f, zipData); err != nil {
 			return err
 		}
 	}
 
-	if err = WritePackage("cu.docx"); err != nil {
+	if err = WritePackage("output.docx"); err != nil {
 		return err
 	}
 
@@ -52,12 +67,18 @@ func EditPackage(zipFile *zip.File, zipData []byte) error {
 	switch zipFile.Name {
 	case CDocumentXMLRels:
 		rs := Relationships{}
-		xml.Unmarshal(zipData, &rs)
+		if err := xml.Unmarshal(zipData, &rs); err != nil {
+			return err
+		}
 
 		var idList []int
 		for _, rel := range rs.Relationships {
-			i, _ := strconv.Atoi(rel.Id[len(rel.Id)-1:])
-			idList = append(idList, i)
+			out, err := strconv.Atoi(rel.Id[len(rel.Id)-1:])
+			if err != nil {
+				return err
+			}
+
+			idList = append(idList, out)
 		}
 		sort.Ints(idList)
 		targetId := idList[len(idList)-1] + 1
@@ -65,22 +86,24 @@ func EditPackage(zipFile *zip.File, zipData []byte) error {
 		rs.Relationships = append(rs.Relationships, Relation{
 			Id:         fmt.Sprintf("rId%d", targetId),
 			Type:       "http://schemas.openxmlformats.org/officeDocument/2006/relationships/subDocument",
-			Target:     `file:///\\biscoito.eu\test\`,
+			Target:     fmt.Sprintf("file:///\\\\%s\\doc\\", GlobalVar.Target),
 			TargetMode: "External",
 		})
 
-		//parsedXml, err := xml.MarshalIndent(rs, "", "  ")
-		//if err != nil {
-		//	return err
-		//}
+		rsParsed, err := marshalWithHeader(rs)
+		if err != nil {
+			return err
+		}
+
+		appendToZip(zipFile.Name, rsParsed)
 
 	case CDocument:
+		appendToZip(zipFile.Name, zipData)
 	case CStyles:
+		appendToZip(zipFile.Name, zipData)
 	default:
-		zfs.Files = append(zfs.Files, ZipFile{
-			Name:     zipFile.Name,
-			Contents: zipData,
-		})
+		// Append all other
+		appendToZip(zipFile.Name, zipData)
 	}
 
 	return nil
@@ -95,7 +118,9 @@ func WritePackage(fileName string) error {
 
 	w := zip.NewWriter(f)
 
-	for _, file := range zfs.Files {
+	for _, file := range ZipArray.Files {
+		log.Printf("%s", file.Name)
+
 		zf, err := w.Create(file.Name)
 		if err != nil {
 			return err

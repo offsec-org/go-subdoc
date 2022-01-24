@@ -14,3 +14,5 @@ type ZipFile struct {
 type ZipFiles struct {
 	Files []ZipFile
 }
+
+var ZipArray ZipFiles
