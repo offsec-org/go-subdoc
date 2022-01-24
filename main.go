@@ -28,7 +28,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	err = ooxml.ReadPackage(filePath)
+	err = ooxml.Initialize(filePath)
 	if err != nil {
 		log.Fatal(err)
 	}
