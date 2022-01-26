@@ -8,6 +8,8 @@ const (
 type Globals struct {
 	FileName string
 	Target   string
+
+	TargetId string
 }
 
 var GlobalVar Globals

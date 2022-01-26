@@ -18,7 +18,7 @@ func main() {
 
 	// If argument invalid / not supplied
 	if len(ooxml.GlobalVar.FileName) <= 0 || len(ooxml.GlobalVar.Target) <= 0 {
-		fmt.Printf("Usage: %s -input target.doc -target example.com or -target 127.0.0.1\n", filepath.Base(os.Args[0]))
+		fmt.Printf("Usage: %s -input target.docx/docm -target example.com/127.0.0.1\n", filepath.Base(os.Args[0]))
 		flag.PrintDefaults()
 		os.Exit(0)
 	}

