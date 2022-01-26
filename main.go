@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-
+	// Parse cmd arguments
 	flag.StringVar(&ooxml.GlobalVar.FileName, "input", "", "Target document")
 	flag.StringVar(&ooxml.GlobalVar.Target, "target", "", "Target server (only domain / ip address)")
 	flag.Parse()
@@ -23,11 +23,13 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Get absolute file path of the target file
 	filePath, err := filepath.Abs(ooxml.GlobalVar.FileName)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	// Initialize routine
 	err = ooxml.Initialize(filePath)
 	if err != nil {
 		log.Fatal(err)

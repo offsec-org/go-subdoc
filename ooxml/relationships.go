@@ -8,8 +8,8 @@ type Relationships struct {
 }
 
 type Relation struct {
-	Id         string `xml:",attr"`
-	Type       string `xml:",attr"`
-	Target     string `xml:",attr"`
-	TargetMode string `xml:",attr,omitempty"`
+	Id         string `xml:"Id,attr"`
+	Type       string `xml:"Type,attr"`
+	Target     string `xml:"Target,attr"`
+	TargetMode string `xml:"TargetMode,attr,omitempty"`
 }

