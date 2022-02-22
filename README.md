@@ -1,6 +1,6 @@
 # go-subdoc
 A tool made in Go that injects a hidden malicious subdoc in a Word document.  
-This comes in handy on phishing campaigns for stealing the NTLMv2 hash.
+This comes in handy on phishing campaigns for stealing the NTLMv2 hash of the victim.
 
 Tested on Microsoft Office 2016 and 2019. Not guarateed to work on the latest Microsoft Office 365 version.
 
