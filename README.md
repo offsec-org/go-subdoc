@@ -17,3 +17,6 @@ go-subdoc -input target.docx/docm -target example.com/127.0.0.1
 ```
 
 Please input only either a domain or an IP Address as the target. No UNC paths or locations.
+
+### References
+- https://rhinosecuritylabs.com/research/abusing-microsoft-word-features-phishing-subdoc/
